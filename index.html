@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NaCasa · Entregáveis Marketing</title>
+
+
+
+
+
 <script>
 // ══════════════════════════════════════════════
 //  CONFIGURAÇÃO SUPABASE — edite aqui
@@ -1076,12 +1081,17 @@ function salvarEdicao(){
   if(!editandoId)return;const idx=dados.findIndex(d=>d.id==editandoId);if(idx===-1)return;const old=dados[idx];
   const stAtivo=document.querySelector('.status-btn[class*="active-"]')?.dataset?.status||statusSelecionado||old.status;
   const atualizado={...old,ativ:document.getElementById('e-ativ').value.trim(),func:document.getElementById('e-func').value,resp:document.getElementById('e-resp').value.trim(),foto:document.getElementById('e-foto').value.trim(),camp:document.getElementById('e-camp').value.trim(),prazo:document.getElementById('e-prazo').value,entrega:document.getElementById('e-entrega').value,prior:document.getElementById('e-prior').value,vinculo:document.getElementById('e-vinculo').value,link:document.getElementById('e-link').value.trim(),obs:document.getElementById('e-obs').value.trim(),status:stAtivo};
-  if(old.status!==atualizado.status)adicionarHistorico(editandoId,`Status: ${SC[old.status].label} → ${SC[atualizado.status].label}`);
-  if(old.resp!==atualizado.resp)adicionarHistorico(editandoId,`Responsável: ${old.resp} → ${atualizado.resp}`);
+  if(old.status!==atualizado.status){adicionarHistorico(editandoId,`Status: ${SC[old.status].label} → ${SC[atualizado.status].label}`);registrarLog('Status alterado',`"${atualizado.ativ}" · ${SC[old.status].label} → ${SC[atualizado.status].label}`);}
+  if(old.resp!==atualizado.resp){adicionarHistorico(editandoId,`Responsável: ${old.resp} → ${atualizado.resp}`);registrarLog('Responsável alterado',`"${atualizado.ativ}" · ${old.resp} → ${atualizado.resp}`);}
   if(atualizado.foto&&atualizado.resp){fotosEquipe[atualizado.resp]=atualizado.foto;saveFotos();}
   dados[idx]=atualizado;saveLocal();populateFilterSelects();syncGS({...atualizado,action:'update'});renderAtivo();fecharModalEdicao();
 }
-function deletarAtual(){if(!editandoId||!confirm('Remover este entregável?'))return;deletarGS(editandoId);dados=dados.filter(d=>d.id!==editandoId);delete comentarios[editandoId];delete checklists[editandoId];delete historico[editandoId];saveLocal();populateFilterSelects();renderAtivo();fecharModalEdicao();}
+function deletarAtual(){
+  if(!editandoId||!confirm('Remover este entregável?'))return;
+  const d=dados.find(x=>x.id===editandoId);
+  registrarLog('Entregável excluído',`"${d?.ativ||''}" · ${d?.resp||''}`);
+  deletarGS(editandoId);dados=dados.filter(d=>d.id!==editandoId);delete comentarios[editandoId];delete checklists[editandoId];delete historico[editandoId];saveLocal();populateFilterSelects();renderAtivo();fecharModalEdicao();
+}
 function renderChecklist(id){const lista=checklists[id]||[];const el=document.getElementById('e-checklist');el.innerHTML=lista.length?lista.map((t,i)=>`<div class="check-item"><input type="checkbox" ${t.done?'checked':''} onchange="toggleTarefa(${id},${i})"><span class="check-item-text${t.done?' done':''}">${t.texto}</span><button class="check-item-del" onclick="removerTarefa(${id},${i})"><i class="ti ti-x"></i></button></div>`).join(''):'<p style="font-size:12px;color:var(--text3);padding:.5rem 0">Nenhuma subtarefa ainda.</p>';}
 function adicionarTarefa(){const input=document.getElementById('e-nova-tarefa');const txt=input.value.trim();if(!txt||!editandoId)return;if(!checklists[editandoId])checklists[editandoId]=[];checklists[editandoId].push({texto:txt,done:false});saveLocal();input.value='';renderChecklist(editandoId);}
 function toggleTarefa(id,idx){if(!checklists[id])return;checklists[id][idx].done=!checklists[id][idx].done;saveLocal();renderChecklist(id);}
@@ -1100,7 +1110,9 @@ function salvar(){
   const vinculo=membro?.vinculo||document.getElementById('f-vinculo').value||'fixo';
   const novo={id:nextId++,func,resp,foto,vinculo,ativ,prazo,entrega:document.getElementById('f-entrega').value,status,camp:document.getElementById('f-camp').value.trim(),prior:document.getElementById('f-prior').value,link:document.getElementById('f-link').value.trim(),obs:document.getElementById('f-obs').value.trim(),criadoEm:agora(),_isNew:true};
   if(foto&&resp){fotosEquipe[resp]=foto;saveFotos();}
-  dados.push(novo);adicionarHistorico(novo.id,'Entregável criado');saveLocal();populateFilterSelects();syncGS(novo);limpar();
+  dados.push(novo);adicionarHistorico(novo.id,'Entregável criado');saveLocal();populateFilterSelects();syncGS(novo);
+  registrarLog('Entregável criado', `"${ativ}" · ${resp} · ${func}`);
+  limpar();
   const t=document.getElementById('toast');t.style.display='flex';setTimeout(()=>t.style.display='none',2500);
   goTab('dashboard',document.querySelector('.nav-tab'));
 }
@@ -1335,6 +1347,8 @@ async function fazerLogin(){
     if(rows&&rows.length>0){
       _usuario={ok:true,...rows[0]};
       localStorage.setItem('mkt_sessao',JSON.stringify(_usuario));
+      // Log após carregar dados (registrarLog precisa de _usuario)
+      setTimeout(()=>registrarLog('Login','Acesso realizado por '+(_usuario.login||'')),2000);
       document.getElementById('login-page').style.display='none';
       document.getElementById('app-main').style.display='block';
       if(_usuario.perfil==='admin'){
@@ -1351,7 +1365,7 @@ async function fazerLogin(){
       await carregarFuncoes();
       await carregarEquipe();
       renderDashboard();
-      // Atualiza dados a cada 60s em tempo real
+        // Atualiza dados a cada 60s em tempo real
       setInterval(()=>_carregarDadosCliente(),60000);
     }else{
       document.getElementById('login-error').style.display='flex';
@@ -1360,7 +1374,7 @@ async function fazerLogin(){
   }catch(e){
     console.error(e);
     btn.innerHTML='<i class="ti ti-login"></i> Entrar';btn.disabled=false;
-    alert('Erro de conexão. Verifique as configurações do Supabase.');
+    document.getElementById('login-error').style.display='flex';
   }
 }
 
@@ -1434,7 +1448,7 @@ async function abrirModalAdmin(){
       </div>
       <button onclick="document.getElementById('modal-admin-bg').remove()" style="background:rgba(255,255,255,.15);border:none;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">✕</button>
     </div>
-    <div style="padding:1.25rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div style="padding:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <button onclick="admAbrirSecao('empresas')" style="background:var(--white);border:1.5px solid var(--border2);border-radius:12px;padding:1.25rem 1rem;cursor:pointer;text-align:left;transition:all .15s;display:flex;flex-direction:column;gap:8px" onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-light)'" onmouseout="this.style.borderColor='var(--border2)';this.style.background='var(--white)'">
         <div style="width:40px;height:40px;border-radius:10px;background:var(--blue-light);display:flex;align-items:center;justify-content:center"><i class="ti ti-building" style="font-size:20px;color:var(--blue)"></i></div>
         <div><div style="font-size:13px;font-weight:700;color:var(--text)">Empresas</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Cadastrar e gerenciar</div></div>
@@ -1447,6 +1461,10 @@ async function abrirModalAdmin(){
         <div style="width:40px;height:40px;border-radius:10px;background:var(--ok-bg);display:flex;align-items:center;justify-content:center"><i class="ti ti-id-badge" style="font-size:20px;color:var(--ok)"></i></div>
         <div><div style="font-size:13px;font-weight:700;color:var(--text)">Equipe</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Membros e freelancers</div></div>
       </button>
+      <button onclick="admAbrirSecao('logs')" style="background:var(--white);border:1.5px solid var(--border2);border-radius:12px;padding:1.25rem 1rem;cursor:pointer;text-align:left;transition:all .15s;display:flex;flex-direction:column;gap:8px" onmouseover="this.style.borderColor='var(--blue)';this.style.background='var(--blue-light)'" onmouseout="this.style.borderColor='var(--border2)';this.style.background='var(--white)'">
+        <div style="width:40px;height:40px;border-radius:10px;background:#fce7f3;display:flex;align-items:center;justify-content:center"><i class="ti ti-list-details" style="font-size:20px;color:#831843"></i></div>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text)">Log de Atividades</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Histórico do sistema</div></div>
+      </button>
     </div>
   </div>`;
   document.body.appendChild(div);
@@ -1458,7 +1476,7 @@ async function admAbrirSecao(secao){
     empresas:{titulo:'Empresas',icone:'ti-building',cor:'var(--blue)',corBg:'var(--blue-light)'},
     funcoes:{titulo:'Funções da Equipe',icone:'ti-briefcase',cor:'var(--gold-dark)',corBg:'#fdf3d7'},
     equipe:{titulo:'Membros da Equipe',icone:'ti-id-badge',cor:'var(--ok)',corBg:'var(--ok-bg)'},
-    usuarios:{titulo:'Acesso por Empresa',icone:'ti-lock',cor:'var(--info)',corBg:'var(--info-bg)'},
+    logs:{titulo:'Log de Atividades',icone:'ti-list-details',cor:'#831843',corBg:'#fce7f3'},
   };
   const cfg=configs[secao];
   const div=document.createElement('div');
@@ -1512,7 +1530,20 @@ async function admAbrirSecao(secao){
     <select id="adm-busca-membro" onchange="admFiltrarMembros()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;margin-bottom:8px;width:100%;background:var(--white)"><option value="">— Ver todos os membros —</option></select>
     <div id="adm-lista-membros" style="display:flex;flex-direction:column;gap:6px"></div>`;
 
-  if(secao==='usuarios') conteudo=`
+  if(secao==='logs') conteudo=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <select id="log-filtro-usuario" onchange="renderLogs()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;background:var(--white)">
+        <option value="">— Todos os usuários —</option>
+      </select>
+      <select id="log-filtro-acao" onchange="renderLogs()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;background:var(--white)">
+        <option value="">— Todas as ações —</option>
+        <option value="login">Login</option>
+        <option value="entregavel">Entregável</option>
+        <option value="admin">Administração</option>
+      </select>
+      <button onclick="limparLogs()" style="margin-left:auto;padding:6px 12px;font-size:12px;font-weight:600;border-radius:var(--r-sm);border:1.5px solid var(--danger-border);color:var(--danger);background:none;cursor:pointer"><i class="ti ti-trash"></i> Limpar logs</button>
+    </div>
+    <div id="log-lista" style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto"></div>`;
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="fg"><label>Usuário</label><input id="adm-user" type="text"></div>
       <div class="fg"><label>Senha</label><input id="adm-pass" type="password"></div>
@@ -1535,6 +1566,69 @@ async function admAbrirSecao(secao){
   </div>`;
   document.body.appendChild(div);
   await admCarregarListas();
+}
+
+// ══════ LOG DE ATIVIDADES ══════
+
+let _logsCache=[];
+
+async function registrarLog(acao, detalhe){
+  if(!_usuario)return;
+  try{
+    await sbPost('logs',{
+      usuario:_usuario.login||'sistema',
+      acao,
+      detalhe
+    });
+  }catch(e){console.warn('Erro ao registrar log:',e);}
+}
+
+async function renderLogs(){
+  const lista=document.getElementById('log-lista');
+  if(!lista)return;
+  lista.innerHTML='<div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">Carregando...</div>';
+  try{
+    const filtroUsuario=document.getElementById('log-filtro-usuario')?.value||'';
+    const filtroAcao=document.getElementById('log-filtro-acao')?.value||'';
+    let params='select=*&order=criado_em.desc&limit=100';
+    if(filtroUsuario) params+=`&usuario=eq.${encodeURIComponent(filtroUsuario)}`;
+    if(filtroAcao) params+=`&acao=like.*${encodeURIComponent(filtroAcao)}*`;
+    _logsCache=await sbGet('logs',params);
+    if(!_logsCache.length){
+      lista.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhuma atividade registrada.</p>';
+      return;
+    }
+    const icones={login:'ti-login',entregavel:'ti-clipboard',admin:'ti-settings'};
+    const cores={login:'var(--blue)',entregavel:'var(--ok)',admin:'var(--gold-dark)'};
+    lista.innerHTML=_logsCache.map(l=>{
+      const tipo=Object.keys(icones).find(k=>l.acao?.toLowerCase().includes(k))||'entregavel';
+      const dt=new Date(l.criado_em);
+      const dtStr=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      return`<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm)">
+        <div style="width:30px;height:30px;border-radius:8px;background:${cores[tipo]}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+          <i class="ti ${icones[tipo]}" style="font-size:13px;color:${cores[tipo]}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${l.acao||'—'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.detalhe||''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:11px;font-weight:600;color:var(--blue)">${l.usuario||'—'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">${dtStr}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    lista.innerHTML='<p style="font-size:12px;color:var(--danger);text-align:center;padding:1rem">Erro ao carregar logs.</p>';
+  }
+}
+
+async function limparLogs(){
+  if(!confirm('Apagar todos os logs? Esta ação não pode ser desfeita.'))return;
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/logs?id=gt.0`,{method:'DELETE',headers:sbHeaders()});
+    await renderLogs();
+  }catch(e){alert('Erro ao limpar logs: '+e);}
 }
 
 let _admMembros=[];
@@ -1575,6 +1669,7 @@ async function admAddMembro(){
   if(_equipe.find(m=>m.nome===nome)){alert('Já existe um membro com esse nome!');return;}
   try{
     await sbPost('equipe',{nome,func,vinculo,foto});
+    registrarLog('Admin · Membro adicionado', `${nome} · ${func} · ${vinculo}`);
     document.getElementById('adm-eq-nome').value='';
     document.getElementById('adm-eq-foto').value='';
     document.getElementById('adm-eq-foto-preview').innerHTML='<i class="ti ti-user" style="font-size:14px;color:var(--blue)"></i>';
@@ -1670,8 +1765,15 @@ function admFiltrarUsuarios(){
 
 async function admCarregarListas(){
   const selEmp=document.getElementById('adm-emp');
-  // Funções
-  try{_admFuncoes=await sbGet('funcoes','select=*&order=nome');}catch(e){_admFuncoes=[];}
+  // Logs
+  if(document.getElementById('log-lista')){
+    await renderLogs();
+    // Popular filtro de usuários
+    const selU=document.getElementById('log-filtro-usuario');
+    if(selU&&_admUsuarios.length){
+      selU.innerHTML='<option value="">— Todos os usuários —</option>'+_admUsuarios.map(u=>`<option value="${u.login}">${u.login}</option>`).join('');
+    }
+  }
   const selF=document.getElementById('adm-busca-funcao');
   if(selF)selF.innerHTML='<option value="">— Ver todas as funções —</option>'+_admFuncoes.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
   // Popula select de funções do formulário de membro
@@ -1701,6 +1803,7 @@ async function admAddEmpresa(){
   if(!nome){alert('Digite o nome da empresa');return;}
   try{
     await sbPost('empresas',{nome});
+    registrarLog('Admin · Empresa adicionada', nome);
     await _carregarEmpresas();
     document.getElementById('adm-empresa').value='';
     await admCarregarListas();
@@ -1723,6 +1826,7 @@ async function admAddUsuario(){
   if(!u||!s||!e){alert('Preencha todos os campos');return;}
   try{
     await sbPost('usuarios',{login:u,senha:s,perfil:'cliente',empresa:e});
+    registrarLog('Admin · Acesso criado', `Usuário "${u}" para empresa "${e}"`);
     document.getElementById('adm-user').value='';
     document.getElementById('adm-pass').value='';
     await admCarregarListas();
@@ -1778,7 +1882,47 @@ document.getElementById('l-senha').addEventListener('keydown',e=>{if(e.key==='En
 document.getElementById('l-usuario').addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin();});
 atualizarBadgeGS();
 
-// Restaurar sessão ao recarregar a página
+// ══════ PWA + NOTIFICAÇÕES ══════
+
+async function registrarServiceWorker(){
+  if(!('serviceWorker' in navigator))return;
+  try{
+    await navigator.serviceWorker.register('service-worker.js');
+  }catch(e){console.warn('SW não registrado:',e);}
+}
+
+async function solicitarPermissaoNotificacao(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='default'){
+    await Notification.requestPermission();
+  }
+}
+
+async function agendarNotificacoes(){
+  if(!('serviceWorker' in navigator)||!dados.length)return;
+  if(Notification.permission!=='granted')return;
+  try{
+    const sw=await navigator.serviceWorker.ready;
+    sw.active?.postMessage({
+      tipo:'agendar-notificacoes',
+      entregaveis:dados
+    });
+  }catch(e){}
+}
+
+// Verifica horário para notificar (entre 8h e 9h da manhã)
+function deveNotificarAgora(){
+  const hora=new Date().getHours();
+  const ultimaNotif=localStorage.getItem('mkt_ultima_notif');
+  const hoje=new Date().toISOString().split('T')[0];
+  if(ultimaNotif===hoje)return false; // já notificou hoje
+  if(hora>=8&&hora<9){localStorage.setItem('mkt_ultima_notif',hoje);return true;}
+  return false;
+}
+
+// Inicializa PWA
+registrarServiceWorker();
+solicitarPermissaoNotificacao();
 (async function restaurarSessao(){
   const sessao=localStorage.getItem('mkt_sessao');
   if(!sessao)return;
