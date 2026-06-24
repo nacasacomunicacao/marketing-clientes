@@ -1420,35 +1420,53 @@ let _empresaFiltro='';
 
 function aplicarPermissoes(){
   const perfil=_usuario?.perfil||'cliente';
-  const perm=_usuario?.permissoes||{};
+  let perm=_usuario?.permissoes||{};
+  if(typeof perm==='string'){try{perm=JSON.parse(perm);}catch(e){perm={};}}
 
-  // Helper
   const isAdmin=perfil==='admin';
   const isColab=perfil==='colaborador';
   const isCliente=perfil==='cliente';
 
-  // Badge Supabase
-  document.getElementById('gs-btn').style.display=isAdmin?'inline-flex':'none';
+  const gsBtn=document.getElementById('gs-btn');
+  const tabRes=document.getElementById('tab-resultados');
+  const btnCamp=document.getElementById('btn-nova-campanha');
+  const empresaBar=document.getElementById('empresa-bar');
+  const clienteBar=document.getElementById('cliente-bar');
 
-  // Aba Resultados — só admin
-  document.getElementById('tab-resultados').style.display=isAdmin?'flex':'none';
+  if(gsBtn) gsBtn.style.display=isAdmin?'inline-flex':'none';
+  if(tabRes) tabRes.style.display=isAdmin?'flex':'none';
 
-  // Botão Nova campanha — admin sempre, colaborador se tiver permissão
-  const podeNovaCamp=isAdmin||(isColab&&perm.campanha);
-  document.getElementById('btn-nova-campanha').style.display=podeNovaCamp?'inline-flex':'none';
+  const podeNovaCamp=isAdmin||(isColab&&(perm.campanha===true||perm.campanha==='true'));
+  if(btnCamp) btnCamp.style.display=podeNovaCamp?'inline-flex':'none';
 
-  // Botão Novo entregável — admin e colaborador
   document.querySelectorAll('.nav-add').forEach(b=>b.style.display=isCliente?'none':'');
 
-  // Barra de empresa/cliente
   if(isAdmin){
-    document.getElementById('empresa-bar').style.display='flex';
-    document.getElementById('cliente-bar').style.display='none';
+    if(empresaBar) empresaBar.style.display='flex';
+    if(clienteBar) clienteBar.style.display='none';
   }else{
-    document.getElementById('empresa-bar').style.display='none';
-    document.getElementById('cliente-bar').style.display='flex';
-    document.getElementById('cliente-empresa-nome').textContent=_usuario.empresa||'';
-    _empresaFiltro=_usuario.empresa||'';
+    const todasEmpresas=isColab&&(perm.todas_empresas===true||perm.todas_empresas==='true');
+    const empresasLista=isColab&&Array.isArray(perm.empresas)&&perm.empresas.length>0?perm.empresas:null;
+    if(todasEmpresas){
+      if(empresaBar) empresaBar.style.display='flex';
+      if(clienteBar) clienteBar.style.display='none';
+      _empresaFiltro='';
+    }else if(empresasLista){
+      if(empresaBar) empresaBar.style.display='flex';
+      if(clienteBar) clienteBar.style.display='none';
+      _empresaFiltro='';
+      setTimeout(()=>{
+        const sel=document.getElementById('empresa-select');
+        if(sel) sel.innerHTML='<option value="">— Todas as minhas empresas —</option>'+
+          empresasLista.map(e=>`<option value="${e}">${e}</option>`).join('');
+      },500);
+    }else{
+      if(empresaBar) empresaBar.style.display='none';
+      if(clienteBar) clienteBar.style.display='flex';
+      const nomeEl=document.getElementById('cliente-empresa-nome');
+      if(nomeEl) nomeEl.textContent=_usuario.empresa||'NaCasa';
+      _empresaFiltro=_usuario.empresa||'';
+    }
   }
 }
 
@@ -1468,7 +1486,9 @@ async function fazerLogin(){
       document.getElementById('login-page').style.display='none';
       document.getElementById('app-main').style.display='block';
       aplicarPermissoes();
-      if(_usuario.perfil==='admin') await _carregarEmpresas();
+      const perm=_usuario.permissoes||{};
+      const todasEmp=_usuario.perfil==='admin'||(perm.todas_empresas===true||perm.todas_empresas==='true');
+      if(todasEmp) await _carregarEmpresas();
       await _carregarDadosCliente();
       await carregarFuncoes();
       await carregarEquipe();
@@ -1602,15 +1622,16 @@ async function admAbrirSecao(secao){
     <select id="adm-busca-empresa" onchange="admFiltrarEmpresas()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;margin-bottom:16px;width:100%;background:var(--white)"><option value="">— Ver todas as empresas —</option></select>
     <div id="adm-lista-empresas" style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px"></div>
     <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-lock" style="color:var(--blue)"></i> Login de acesso por empresa</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-lock" style="color:var(--blue)"></i> Acesso do cliente</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="fg"><label>Usuário</label><input id="adm-user" type="text"></div>
       <div class="fg"><label>Senha</label><input id="adm-pass" type="password"></div>
     </div>
+    <div class="fg" style="margin-bottom:10px"><label>E-mail <span style="font-weight:400;color:var(--text3)">(recebe as credenciais)</span></label><input id="adm-email" type="email" placeholder="cliente@gmail.com"></div>
     <div class="fg" style="margin-bottom:12px"><label>Empresa</label>
       <select id="adm-emp" style="font-size:13px;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;width:100%"></select>
     </div>
-    <button onclick="admAddUsuario()" style="width:100%;padding:11px;font-size:13px;font-weight:700;border-radius:var(--r-sm);background:var(--blue);color:#fff;border:none;cursor:pointer;margin-bottom:14px"><i class="ti ti-lock"></i> Criar acesso para empresa</button>
+    <button onclick="admAddUsuario()" style="width:100%;padding:11px;font-size:13px;font-weight:700;border-radius:var(--r-sm);background:var(--blue);color:#fff;border:none;cursor:pointer;margin-bottom:14px"><i class="ti ti-lock"></i> Criar acesso e enviar e-mail</button>
     <select id="adm-busca-usuario" onchange="admFiltrarUsuarios()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;margin-bottom:8px;width:100%;background:var(--white)"><option value="">— Ver acessos cadastrados —</option></select>
     <div id="adm-lista-usuarios" style="display:flex;flex-direction:column;gap:6px"></div>`;
 
@@ -1635,7 +1656,28 @@ async function admAbrirSecao(secao){
         </div>
       </div>
     </div>
-    <button onclick="admAddMembro()" style="width:100%;padding:10px;font-size:13px;font-weight:700;border-radius:var(--r-sm);background:var(--blue);color:#fff;border:none;cursor:pointer;margin-bottom:12px"><i class="ti ti-user-plus"></i> Adicionar membro</button>
+    <div style="height:1px;background:var(--border);margin-bottom:14px"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-lock" style="color:var(--ok)"></i> Acesso do colaborador</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="fg"><label>Usuário</label><input id="adm-eq-login" type="text" placeholder="login do colaborador"></div>
+      <div class="fg"><label>Senha</label><input id="adm-eq-senha" type="password"></div>
+    </div>
+    <div class="fg" style="margin-bottom:10px"><label>E-mail <span style="font-weight:400;color:var(--text3)">(recebe as credenciais)</span></label><input id="adm-eq-email" type="email" placeholder="colaborador@gmail.com"></div>
+    <div style="background:var(--ok-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--ok);text-transform:uppercase;margin-bottom:8px">Permissões</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-campanha" style="width:15px;height:15px"> Criar campanhas no Planejamento</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-equipe" style="width:15px;height:15px"> Cadastrar membros na Equipe</label>
+        <div style="margin-top:4px">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">Empresas com acesso:</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="eq-perm-todas" onchange="admToggleEmpresasColab()" style="width:15px;height:15px"> Todas as empresas
+          </label>
+          <div id="eq-empresas-lista" style="display:flex;flex-direction:column;gap:6px;padding-left:4px"></div>
+        </div>
+      </div>
+    </div>
+    <button onclick="admAddMembroComAcesso()" style="width:100%;padding:10px;font-size:13px;font-weight:700;border-radius:var(--r-sm);background:var(--ok);color:#fff;border:none;cursor:pointer;margin-bottom:12px"><i class="ti ti-lock"></i> Adicionar membro e criar acesso</button>
     <select id="adm-busca-membro" onchange="admFiltrarMembros()" style="font-size:12px;padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;margin-bottom:8px;width:100%;background:var(--white)"><option value="">— Ver todos os membros —</option></select>
     <div id="adm-lista-membros" style="display:flex;flex-direction:column;gap:6px"></div>`;
 
@@ -2305,6 +2347,94 @@ function admFiltrarMembros(){
     </div>`).join('');
 }
 
+function admToggleEmpresasColab(){
+  const todas=document.getElementById('eq-perm-todas')?.checked;
+  const lista=document.getElementById('eq-empresas-lista');
+  if(!lista)return;
+  if(todas){
+    lista.innerHTML='';
+  }else{
+    lista.innerHTML=_admEmpresas.map(e=>`
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 8px;background:rgba(255,255,255,.6);border-radius:6px">
+        <input type="checkbox" class="eq-perm-empresa" value="${e.nome}" style="width:14px;height:14px"> ${e.nome}
+      </label>`).join('');
+  }
+}
+
+function admGetEmpresasColab(){
+  const todas=document.getElementById('eq-perm-todas')?.checked;
+  if(todas) return 'todas';
+  const checks=document.querySelectorAll('.eq-perm-empresa:checked');
+  return Array.from(checks).map(c=>c.value);
+}
+  const nome=document.getElementById('adm-eq-nome')?.value.trim();
+  const func=document.getElementById('adm-eq-func')?.value;
+  const vinculo=document.getElementById('adm-eq-vinculo')?.value||'fixo';
+  const foto=document.getElementById('adm-eq-foto')?.value||'';
+  const login=document.getElementById('adm-eq-login')?.value.trim();
+  const senha=document.getElementById('adm-eq-senha')?.value.trim();
+  const email=document.getElementById('adm-eq-email')?.value.trim()||'';
+  if(!nome||!func){alert('Preencha nome e função do membro.');return;}
+
+  try{
+    // Verificar se login já existe
+    if(login){
+      try{
+        const loginExiste=await sbGet('usuarios',`login=eq.${encodeURIComponent(login)}&select=id`);
+        if(loginExiste&&loginExiste.length>0){
+          alert(`O usuário "${login}" já existe. Use um nome de usuário diferente.`);
+          return;
+        }
+      }catch(e){
+        // Se der erro na verificação, ignora e tenta inserir mesmo assim
+        console.warn('Erro ao verificar login:',e);
+      }
+    }
+
+    // Salva membro na equipe
+    await sbPost('equipe',{nome,func,vinculo,foto});
+    registrarLog('Admin · Membro adicionado',`${nome} · ${func} · ${vinculo}`);
+
+    // Cria acesso de colaborador se informado
+    if(login&&senha){
+      const empresasAcesso=admGetEmpresasColab();
+      const permissoes={
+        campanha:document.getElementById('eq-perm-campanha')?.checked||false,
+        equipe:document.getElementById('eq-perm-equipe')?.checked||false,
+        todas_empresas:empresasAcesso==='todas',
+        empresas:empresasAcesso==='todas'?[]:empresasAcesso,
+      };
+      await sbPost('usuarios',{login,senha,perfil:'colaborador',empresa:null,email,permissoes});
+      registrarLog('Admin · Acesso colaborador criado',`${login} · ${nome}`);
+
+      // Envia e-mail
+      if(email){
+        try{
+          await fetch(`${SUPABASE_URL}/functions/v1/smooth-processor`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY},
+            body:JSON.stringify({email,login,senha,nome,tipo:'colaborador'})
+          });
+        }catch(err){console.warn('Erro ao enviar e-mail:',err);}
+      }
+    }
+
+    // Limpar campos
+    document.getElementById('adm-eq-nome').value='';
+    document.getElementById('adm-eq-foto').value='';
+    document.getElementById('adm-eq-foto-preview').innerHTML='<i class="ti ti-user" style="font-size:14px;color:var(--blue)"></i>';
+    if(document.getElementById('adm-eq-login')) document.getElementById('adm-eq-login').value='';
+    if(document.getElementById('adm-eq-senha')) document.getElementById('adm-eq-senha').value='';
+    if(document.getElementById('adm-eq-email')) document.getElementById('adm-eq-email').value='';
+    await carregarEquipe();
+    await admCarregarListas();
+    alert(email&&login?`Membro "${nome}" adicionado! Credenciais enviadas para ${email}.`:`Membro "${nome}" adicionado!`);
+  }catch(e){
+    console.error('Erro admAddMembroComAcesso:',e);
+    alert('Erro ao salvar: '+e);
+  }
+}
+
 async function admAddMembro(){
   const nome=document.getElementById('adm-eq-nome')?.value.trim();
   const func=document.getElementById('adm-eq-func')?.value;
@@ -2426,7 +2556,14 @@ async function admCarregarListas(){
   // Popula select de funções do formulário de membro
   const selEqFunc=document.getElementById('adm-eq-func');
   if(selEqFunc)selEqFunc.innerHTML='<option value="">Selecione...</option>'+_admFuncoes.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
-  admFiltrarFuncoes();
+  // Popular lista de empresas no formulário de colaborador
+  const listaEmpColab=document.getElementById('eq-empresas-lista');
+  if(listaEmpColab&&!document.getElementById('eq-perm-todas')?.checked){
+    listaEmpColab.innerHTML=_admEmpresas.map(e=>`
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 8px;background:rgba(255,255,255,.6);border-radius:6px">
+        <input type="checkbox" class="eq-perm-empresa" value="${e.nome}" style="width:14px;height:14px"> ${e.nome}
+      </label>`).join('');
+  }
   // Membros
   _admMembros=_equipe.length?_equipe:[];
   const selM=document.getElementById('adm-busca-membro');
@@ -2491,7 +2628,7 @@ async function admAddUsuario(){
     // Enviar e-mail se tiver endereço
     if(email){
       try{
-        await fetch(`${SUPABASE_URL}/functions/v1/enviar-acesso`,{
+        await fetch(`${SUPABASE_URL}/functions/v1/smooth-processor`,{
           method:'POST',
           headers:{
             'Content-Type':'application/json',
@@ -2607,11 +2744,13 @@ solicitarPermissaoNotificacao();
   if(!sessao)return;
   try{_usuario=JSON.parse(sessao);}catch(e){localStorage.removeItem('mkt_sessao');return;}
   _usuario.permissoes=_usuario.permissoes||{};
-  document.getElementById('login-page').style.display='none';
-  document.getElementById('app-main').style.display='block';
-  aplicarPermissoes();
   try{
-    if(_usuario.perfil==='admin') await _carregarEmpresas();
+    document.getElementById('login-page').style.display='none';
+    document.getElementById('app-main').style.display='block';
+    aplicarPermissoes();
+    const permR=_usuario.permissoes||{};
+    const todasEmpR=_usuario.perfil==='admin'||(permR.todas_empresas===true||permR.todas_empresas==='true');
+    if(todasEmpR) await _carregarEmpresas();
     await _carregarDadosCliente();
     await carregarFuncoes();
     await carregarEquipe();
@@ -2620,7 +2759,11 @@ solicitarPermissaoNotificacao();
     renderDashboard();
     setInterval(()=>_carregarDadosCliente(),60000);
   }catch(e){
-    console.warn('Erro ao recarregar dados, mantendo sessão:', e);
+    console.warn('Erro ao restaurar sessão:', e);
+    // Se falhar, volta para o login
+    localStorage.removeItem('mkt_sessao');
+    document.getElementById('login-page').style.display='flex';
+    document.getElementById('app-main').style.display='none';
   }
 })();
 
