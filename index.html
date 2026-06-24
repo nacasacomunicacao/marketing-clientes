@@ -1433,7 +1433,8 @@ function aplicarPermissoes(){
   const empresaBar=document.getElementById('empresa-bar');
   const clienteBar=document.getElementById('cliente-bar');
 
-  if(gsBtn) gsBtn.style.display=isAdmin?'inline-flex':'none';
+  const btnGerenciar=document.getElementById('btn-gerenciar');
+  if(btnGerenciar) btnGerenciar.style.display=isAdmin?'inline-flex':'none';
   if(tabRes) tabRes.style.display=isAdmin?'flex':'none';
 
   const podeNovaCamp=isAdmin||(isColab&&(perm.campanha===true||perm.campanha==='true'));
@@ -1549,6 +1550,14 @@ async function _carregarDadosCliente(){
 async function trocarEmpresa(){
   _empresaFiltro=document.getElementById('empresa-select').value;
   await _carregarDadosCliente();
+  // Atualizar Gantt se estiver na aba de planejamento
+  const ganttEmpSel=document.getElementById('gantt-filtro-empresa');
+  if(ganttEmpSel){
+    ganttEmpSel.value=_empresaFiltro;
+    if(document.getElementById('page-planejamento')?.classList.contains('active')){
+      await renderGantt();
+    }
+  }
 }
 
 function logout(){
@@ -1665,15 +1674,23 @@ async function admAbrirSecao(secao){
     <div class="fg" style="margin-bottom:10px"><label>E-mail <span style="font-weight:400;color:var(--text3)">(recebe as credenciais)</span></label><input id="adm-eq-email" type="email" placeholder="colaborador@gmail.com"></div>
     <div style="background:var(--ok-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:700;color:var(--ok);text-transform:uppercase;margin-bottom:8px">Permissões</div>
+    <div style="background:var(--ok-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--ok);text-transform:uppercase;margin-bottom:8px">Permissões</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-campanha" style="width:15px;height:15px"> Criar campanhas no Planejamento</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-equipe" style="width:15px;height:15px"> Cadastrar membros na Equipe</label>
-        <div style="margin-top:4px">
-          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">Empresas com acesso:</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">
-            <input type="checkbox" id="eq-perm-todas" onchange="admToggleEmpresasColab()" style="width:15px;height:15px"> Todas as empresas
-          </label>
-          <div id="eq-empresas-lista" style="display:flex;flex-direction:column;gap:6px;padding-left:4px"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:6px 10px;background:rgba(220,38,38,.07);border-radius:6px;border:1px solid rgba(220,38,38,.2)">
+          <input type="checkbox" id="eq-perm-admin" onchange="admTogglePerfilAdmin()" style="width:15px;height:15px;accent-color:#dc2626;flex-shrink:0">
+          <span><strong style="color:#dc2626">Perfil Administrador</strong> — acesso total igual ao admin</span>
+        </label>
+        <div id="eq-perms-extras" style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-campanha" style="width:15px;height:15px;accent-color:var(--blue)"> Criar campanhas no Planejamento</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="eq-perm-equipe" style="width:15px;height:15px;accent-color:var(--blue)"> Cadastrar membros na Equipe</label>
+          <div style="margin-top:2px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">Empresas com acesso:</div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">
+              <input type="checkbox" id="eq-perm-todas" onchange="admToggleEmpresasColab()" style="width:15px;height:15px;accent-color:var(--blue)"> Todas as empresas
+            </label>
+            <div id="eq-empresas-lista" style="display:flex;flex-direction:column;gap:6px;padding-left:4px"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2344,21 +2361,229 @@ function admFiltrarMembros(){
         <div style="font-size:11px;color:var(--text3)">${m.func||'—'} · <span style="font-weight:600;color:${m.vinculo==='freelancer'?'var(--gold-dark)':'var(--text2)'}">${m.vinculo==='freelancer'?'Freelancer':'Fixo'}</span></div>
       </div>
       <button onclick="admExcluirMembro(${m.id},'${m.nome.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:12px;padding:3px 6px;border-radius:4px"><i class="ti ti-trash"></i></button>
+      <button onclick="admEditarMembro(${m.id},'${m.nome.replace(/'/g,"\\'")}','${(m.func||'').replace(/'/g,"\\'")}','${m.vinculo||'fixo'}')" style="background:none;border:1px solid var(--border2);cursor:pointer;color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;white-space:nowrap"><i class="ti ti-edit"></i> Editar</button>
     </div>`).join('');
 }
 
-function admToggleEmpresasColab(){
+async function admToggleEmpresasColab(){
   const todas=document.getElementById('eq-perm-todas')?.checked;
   const lista=document.getElementById('eq-empresas-lista');
   if(!lista)return;
   if(todas){
     lista.innerHTML='';
+    lista.style.display='none';
   }else{
-    lista.innerHTML=_admEmpresas.map(e=>`
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 8px;background:rgba(255,255,255,.6);border-radius:6px">
-        <input type="checkbox" class="eq-perm-empresa" value="${e.nome}" style="width:14px;height:14px"> ${e.nome}
-      </label>`).join('');
+    lista.style.display='block';
+    if(!_admEmpresas.length){
+      try{_admEmpresas=await sbGet('empresas','select=*&order=nome');}catch(e){_admEmpresas=[];}
+    }
+    lista.innerHTML=`
+      <div style="position:relative">
+        <div id="eq-emp-trigger" onclick="admToggleDropdownEmpresas()" style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1.5px solid var(--border2);border-radius:var(--r-sm);background:#fff;cursor:pointer;font-size:13px;color:var(--text);user-select:none">
+          <span id="eq-emp-label">Selecione as empresas...</span>
+          <i class="ti ti-chevron-down" id="eq-emp-chevron" style="font-size:14px;color:var(--text3);transition:transform .2s"></i>
+        </div>
+        <div id="eq-emp-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--border2);border-radius:var(--r-sm);box-shadow:0 4px 16px rgba(43,63,212,.12);z-index:50;max-height:200px;overflow:hidden;flex-direction:column">
+          <div style="padding:8px;border-bottom:1px solid var(--border)">
+            <input id="eq-busca-emp" type="text" placeholder="Buscar empresa..." oninput="admFiltrarEmpresasColab()" style="width:100%;font-size:12px;padding:6px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;box-sizing:border-box" onclick="event.stopPropagation()">
+          </div>
+          <div id="eq-emp-opcoes" style="overflow-y:auto;max-height:140px;padding:4px">
+            ${_admEmpresas.map(e=>`
+              <label onclick="event.stopPropagation();admAtualizarLabelEmpresas()" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:7px 10px;border-radius:6px;transition:background .1s" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="eq-perm-empresa" value="${e.nome}" style="width:15px;height:15px;accent-color:var(--blue);flex-shrink:0"> ${e.nome}
+              </label>`).join('')}
+          </div>
+        </div>
+      </div>`;
+    setTimeout(()=>{
+      document.addEventListener('click', function handler(e){
+        const drop=document.getElementById('eq-emp-dropdown');
+        const trigger=document.getElementById('eq-emp-trigger');
+        if(drop&&!drop.contains(e.target)&&!trigger?.contains(e.target)){
+          drop.style.display='none';
+          const chev=document.getElementById('eq-emp-chevron');
+          if(chev) chev.style.transform='rotate(0deg)';
+          document.removeEventListener('click',handler);
+        }
+      });
+    },100);
   }
+}
+
+function admTogglePerfilAdmin(){
+  const isAdmin=document.getElementById('eq-perm-admin')?.checked;
+  const extras=document.getElementById('eq-perms-extras');
+  if(extras) extras.style.opacity=isAdmin?'0.4':'1';
+  if(extras) extras.style.pointerEvents=isAdmin?'none':'auto';
+}
+
+async function admEditarMembro(id, nome, func, vinculo){
+  const div=document.createElement('div');
+  div.style.cssText='position:fixed;inset:0;background:rgba(18,19,42,.6);z-index:400;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)';
+  div.onclick=e=>{if(e.target===div)div.remove();};
+
+  const funcOpts=(_admFuncoes.length?_admFuncoes.map(f=>f.nome):FUNCS).map(f=>`<option value="${f}"${f===func?' selected':''}>${f}</option>`).join('');
+
+  div.innerHTML=`<div style="background:#fff;border-radius:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(43,63,212,.2)">
+    <div style="padding:1rem 1.25rem;background:linear-gradient(135deg,var(--blue),var(--blue-dark));border-radius:16px 16px 0 0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">
+      <h2 style="font-size:14px;font-weight:700;color:#fff"><i class="ti ti-edit" style="margin-right:8px"></i>Editar membro</h2>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px">✕</button>
+    </div>
+    <div style="padding:1.25rem;display:flex;flex-direction:column;gap:12px">
+      <!-- Dados do membro -->
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px"><i class="ti ti-id-badge" style="color:var(--blue);margin-right:4px"></i>Dados do membro</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fg"><label>Nome</label><input id="edit-mb-nome" type="text" value="${nome}"></div>
+        <div class="fg"><label>Função</label><select id="edit-mb-func" style="font-size:13px;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;width:100%">${funcOpts}</select></div>
+      </div>
+      <div class="fg"><label>Vínculo</label><select id="edit-mb-vinculo" style="font-size:13px;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;width:100%"><option value="fixo"${vinculo==='fixo'?' selected':''}>Fixo</option><option value="freelancer"${vinculo==='freelancer'?' selected':''}>Freelancer</option></select></div>
+
+      <div style="height:1px;background:var(--border)"></div>
+
+      <!-- Acesso -->
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px"><i class="ti ti-lock" style="color:var(--ok);margin-right:4px"></i>Acesso ao app</div>
+      <div id="edit-acesso-loading" style="font-size:12px;color:var(--text3);padding:8px;text-align:center">Buscando acesso...</div>
+
+      <div style="height:1px;background:var(--border)"></div>
+
+      <!-- Permissões -->
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px"><i class="ti ti-shield" style="color:var(--warn);margin-right:4px"></i>Permissões</div>
+      <div id="edit-perms-loading" style="font-size:12px;color:var(--text3);padding:8px;text-align:center">Buscando permissões...</div>
+
+      <button onclick="admSalvarEdicaoMembro(${id})" style="width:100%;padding:12px;font-size:13px;font-weight:700;border-radius:var(--r-sm);background:var(--blue);color:#fff;border:none;cursor:pointer"><i class="ti ti-device-floppy"></i> Salvar alterações</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+
+  // Buscar usuário vinculado
+  try{
+    const usuarios=await sbGet('usuarios',`select=*&order=login`);
+    // Tenta achar pelo nome similar ao login
+    const nomeSimples=nome.toLowerCase().replace(/\s+/g,'');
+    let usuario=usuarios.find(u=>u.login.toLowerCase().replace(/\s+/g,'')=== nomeSimples)||
+                usuarios.find(u=>nomeSimples.includes(u.login.toLowerCase()))||
+                usuarios.find(u=>u.login.toLowerCase().includes(nomeSimples.substring(0,4)))||null;
+
+    const acessoEl=document.getElementById('edit-acesso-loading');
+    if(acessoEl){
+      const usuariosOpts=usuarios.filter(u=>u.perfil!=='cliente').map(u=>`<option value="${u.id}"${u===usuario?'':''}>Usuário: ${u.login} (${u.perfil})</option>`).join('');
+      acessoEl.id='edit-acesso-content';
+      acessoEl.innerHTML=`
+        <div class="fg" style="margin-bottom:10px"><label>Login vinculado</label>
+          <select id="edit-mb-usuario-id" style="font-size:13px;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;width:100%" onchange="admCarregarPermsUsuario()">
+            <option value="">— Nenhum —</option>${usuariosOpts}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="fg" style="margin:0"><label>Nova senha</label><input id="edit-mb-senha" type="password" placeholder="Deixe em branco para manter"></div>
+          <div class="fg" style="margin:0"><label>Novo e-mail</label><input id="edit-mb-email" type="email" placeholder="Opcional"></div>
+        </div>`;
+      // Selecionar o usuário correspondente
+      if(usuario){
+        const sel=document.getElementById('edit-mb-usuario-id');
+        if(sel) sel.value=usuario.id;
+        admCarregarPermsUsuario(usuario);
+      }
+    }
+  }catch(e){
+    const el=document.getElementById('edit-acesso-loading');
+    if(el) el.textContent='Erro ao carregar acesso.';
+  }
+}
+
+function admCarregarPermsUsuario(usuarioObj){
+  const permsEl=document.getElementById('edit-perms-loading');
+  if(!permsEl)return;
+
+  let usuario=usuarioObj;
+  if(!usuario){
+    const sel=document.getElementById('edit-mb-usuario-id');
+    // Não temos os dados completos aqui, apenas mostra campos básicos
+    permsEl.id='edit-perms-content';
+    permsEl.innerHTML=`<p style="font-size:12px;color:var(--text3)">Selecione um login para editar permissões.</p>`;
+    return;
+  }
+
+  const perm=usuario.permissoes||{};
+  permsEl.id='edit-perms-content';
+  permsEl.innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:6px 10px;background:rgba(220,38,38,.07);border-radius:6px;border:1px solid rgba(220,38,38,.2)">
+        <input type="checkbox" id="edit-perm-admin" style="width:15px;height:15px;accent-color:#dc2626" ${perm.perfil_admin||usuario.perfil==='admin'?'checked':''}>
+        <span><strong style="color:#dc2626">Perfil Administrador</strong> — acesso total</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="edit-perm-campanha" style="width:15px;height:15px;accent-color:var(--blue)" ${perm.campanha?'checked':''}> Criar campanhas no Planejamento
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="edit-perm-equipe" style="width:15px;height:15px;accent-color:var(--blue)" ${perm.equipe?'checked':''}> Cadastrar membros na Equipe
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="edit-perm-todas" style="width:15px;height:15px;accent-color:var(--blue)" ${perm.todas_empresas?'checked':''}> Acesso a todas as empresas
+      </label>
+    </div>`;
+}
+
+async function admSalvarEdicaoMembro(id){
+  const nome=document.getElementById('edit-mb-nome')?.value.trim();
+  const func=document.getElementById('edit-mb-func')?.value;
+  const vinculo=document.getElementById('edit-mb-vinculo')?.value;
+  if(!nome||!func){alert('Preencha nome e função.');return;}
+  try{
+    await sbPatch('equipe',id,{nome,func,vinculo});
+
+    const usuarioId=document.getElementById('edit-mb-usuario-id')?.value;
+    if(usuarioId){
+      const updates={};
+      const novaSenha=document.getElementById('edit-mb-senha')?.value.trim();
+      const novoEmail=document.getElementById('edit-mb-email')?.value.trim();
+      if(novaSenha) updates.senha=novaSenha;
+      if(novoEmail) updates.email=novoEmail;
+
+      const isAdmin=document.getElementById('edit-perm-admin')?.checked||false;
+      updates.perfil=isAdmin?'admin':'colaborador';
+      updates.permissoes={
+        perfil_admin:isAdmin,
+        campanha:isAdmin||document.getElementById('edit-perm-campanha')?.checked||false,
+        equipe:isAdmin||document.getElementById('edit-perm-equipe')?.checked||false,
+        todas_empresas:isAdmin||document.getElementById('edit-perm-todas')?.checked||false,
+      };
+      await sbPatch('usuarios',usuarioId,updates);
+    }
+
+    registrarLog('Membro editado',`${nome} · ${func}`);
+    await carregarEquipe();
+    await admCarregarListas();
+    document.querySelectorAll('[style*="z-index: 400"],[style*="z-index:400"]').forEach(el=>el.remove());
+    alert('Membro atualizado com sucesso!');
+  }catch(e){alert('Erro: '+e);}
+}
+
+function admToggleDropdownEmpresas(){
+  const drop=document.getElementById('eq-emp-dropdown');
+  const chev=document.getElementById('eq-emp-chevron');
+  if(!drop)return;
+  const aberto=drop.style.display==='flex';
+  drop.style.display=aberto?'none':'flex';
+  if(chev) chev.style.transform=aberto?'rotate(0deg)':'rotate(180deg)';
+  if(!aberto) document.getElementById('eq-busca-emp')?.focus();
+}
+
+function admAtualizarLabelEmpresas(){
+  const checks=document.querySelectorAll('.eq-perm-empresa:checked');
+  const label=document.getElementById('eq-emp-label');
+  if(!label)return;
+  if(checks.length===0) label.textContent='Selecione as empresas...';
+  else if(checks.length===1) label.textContent=checks[0].value;
+  else label.textContent=`${checks.length} empresas selecionadas`;
+}
+
+function admFiltrarEmpresasColab(){
+  const q=(document.getElementById('eq-busca-emp')?.value||'').toLowerCase();
+  document.querySelectorAll('#eq-emp-opcoes label').forEach(label=>{
+    const nome=label.textContent.trim().toLowerCase();
+    label.style.display=nome.includes(q)?'flex':'none';
+  });
 }
 
 function admGetEmpresasColab(){
@@ -2367,6 +2592,8 @@ function admGetEmpresasColab(){
   const checks=document.querySelectorAll('.eq-perm-empresa:checked');
   return Array.from(checks).map(c=>c.value);
 }
+
+async function admAddMembroComAcesso(){
   const nome=document.getElementById('adm-eq-nome')?.value.trim();
   const func=document.getElementById('adm-eq-func')?.value;
   const vinculo=document.getElementById('adm-eq-vinculo')?.value||'fixo';
@@ -2397,14 +2624,17 @@ function admGetEmpresasColab(){
 
     // Cria acesso de colaborador se informado
     if(login&&senha){
-      const empresasAcesso=admGetEmpresasColab();
+      const isPerfilAdmin=document.getElementById('eq-perm-admin')?.checked||false;
+      const empresasAcesso=isPerfilAdmin?'todas':admGetEmpresasColab();
       const permissoes={
-        campanha:document.getElementById('eq-perm-campanha')?.checked||false,
-        equipe:document.getElementById('eq-perm-equipe')?.checked||false,
-        todas_empresas:empresasAcesso==='todas',
+        perfil_admin:isPerfilAdmin,
+        campanha:isPerfilAdmin||document.getElementById('eq-perm-campanha')?.checked||false,
+        equipe:isPerfilAdmin||document.getElementById('eq-perm-equipe')?.checked||false,
+        todas_empresas:isPerfilAdmin||(empresasAcesso==='todas'),
         empresas:empresasAcesso==='todas'?[]:empresasAcesso,
       };
-      await sbPost('usuarios',{login,senha,perfil:'colaborador',empresa:null,email,permissoes});
+      const perfilFinal=isPerfilAdmin?'admin':'colaborador';
+      await sbPost('usuarios',{login,senha,perfil:perfilFinal,empresa:null,email,permissoes});
       registrarLog('Admin · Acesso colaborador criado',`${login} · ${nome}`);
 
       // Envia e-mail
@@ -2556,14 +2786,9 @@ async function admCarregarListas(){
   // Popula select de funções do formulário de membro
   const selEqFunc=document.getElementById('adm-eq-func');
   if(selEqFunc)selEqFunc.innerHTML='<option value="">Selecione...</option>'+_admFuncoes.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
-  // Popular lista de empresas no formulário de colaborador
+  // Popular lista de empresas no formulário de colaborador — aberta por padrão
   const listaEmpColab=document.getElementById('eq-empresas-lista');
-  if(listaEmpColab&&!document.getElementById('eq-perm-todas')?.checked){
-    listaEmpColab.innerHTML=_admEmpresas.map(e=>`
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 8px;background:rgba(255,255,255,.6);border-radius:6px">
-        <input type="checkbox" class="eq-perm-empresa" value="${e.nome}" style="width:14px;height:14px"> ${e.nome}
-      </label>`).join('');
-  }
+  if(listaEmpColab) await admToggleEmpresasColab();
   // Membros
   _admMembros=_equipe.length?_equipe:[];
   const selM=document.getElementById('adm-busca-membro');
@@ -2736,18 +2961,18 @@ function deveNotificarAgora(){
   return false;
 }
 
-// Inicializa PWA
-registrarServiceWorker();
-solicitarPermissaoNotificacao();
+// Inicializa badge Supabase
+atualizarBadgeGS();
 (async function restaurarSessao(){
   const sessao=localStorage.getItem('mkt_sessao');
   if(!sessao)return;
   try{_usuario=JSON.parse(sessao);}catch(e){localStorage.removeItem('mkt_sessao');return;}
   _usuario.permissoes=_usuario.permissoes||{};
+  // Mostra app imediatamente — nunca deslogar por erro de rede
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('app-main').style.display='block';
+  aplicarPermissoes();
   try{
-    document.getElementById('login-page').style.display='none';
-    document.getElementById('app-main').style.display='block';
-    aplicarPermissoes();
     const permR=_usuario.permissoes||{};
     const todasEmpR=_usuario.perfil==='admin'||(permR.todas_empresas===true||permR.todas_empresas==='true');
     if(todasEmpR) await _carregarEmpresas();
@@ -2759,11 +2984,9 @@ solicitarPermissaoNotificacao();
     renderDashboard();
     setInterval(()=>_carregarDadosCliente(),60000);
   }catch(e){
-    console.warn('Erro ao restaurar sessão:', e);
-    // Se falhar, volta para o login
-    localStorage.removeItem('mkt_sessao');
-    document.getElementById('login-page').style.display='flex';
-    document.getElementById('app-main').style.display='none';
+    // Mantém logado mesmo com erro — só dados podem não carregar
+    console.warn('Erro ao carregar dados na restauração:', e);
+    renderDashboard();
   }
 })();
 
